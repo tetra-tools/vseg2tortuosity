@@ -26,6 +26,7 @@ If you use this pipeline for your projects, please cite:
       - [Output of Docker](#output-of-docker)
     - [Option 2: Manual Setup](#option-2-manual-setup)
       - [Running the Repo](#running-the-repo)
+      - [Manual Set up Video Demo](#manual-set-up-video-demo)
       - [Manual Example Output](#manual-example-output)
   - [Name and Label of Vessels](#name-and-label-of-vessels)
   - [Tortuosity Metrics](#tortuosity-metrics)
@@ -68,7 +69,7 @@ docker run --rm -v /path/to/work/dir/with/TOF/image:/app/workdir pyiyan/vseg2tor
 ```
 #### Docker video demo
 
-[![Watch the video](https://img.youtube.com/vi/ItdNaSA6kzs/0.jpg)](https://www.youtube.com/watch?v=ItdNaSA6kzs)
+[![Watch the video](https://img.youtube.com/vi/XnBidVEEzYk/0.jpg)](https://www.youtube.com/watch?v=XnBidVEEzYk)
 
 For docker user, the input name of each file need to be: `TOF_eICAB_CW.nii.gz`
 
@@ -105,6 +106,11 @@ if you use the segmentation result from  [eICAB](https://gitlab.com/FelixDumais/
 
 If you want to apply the pipeline on the whole dataset, use the docker version of it and write shell script to process batch data. 
 
+#### Manual Set up Video Demo
+
+[![Watch the video](https://img.youtube.com/vi/rNT4W5paKeA/0.jpg)](https://www.youtube.com/watch?v=rNT4W5paKeA)
+
+For docker user, the input name of each file need to be: `TOF_eICAB_CW.nii.gz`
 
 #### Manual Example Output
 If you use the manual installation option, the output will include:
