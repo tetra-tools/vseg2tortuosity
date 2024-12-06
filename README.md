@@ -83,8 +83,8 @@ If you use the docker installation option, the `run_pipeline.sh` script in the d
 ### Option 2: Manual Setup
 If you prefer not to use Docker, you can set up the environment manually by cloning the repo first, create a enviroment for the project and install all dependency 
 ```
-git clone https://github.com/tetra-tools/vessel_skeleton_map.git
-cd vessel_skeleton_map
+git clone https://github.com/tetra-tools/vseg2tortuosity.git
+cd vseg2tortuosity
 conda create --name vseg2tortuosity_env python=3.9
 conda activate vseg2tortuosity_env
 python -m pip install -r requirements.txt
