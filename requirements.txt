@@ -1,0 +1,13 @@
+nibabel
+scikit-image  
+scikit-learn
+numpy
+pandas
+matplotlib
+networkx
+numba
+seaborn
+sknw
+trimesh
+
+

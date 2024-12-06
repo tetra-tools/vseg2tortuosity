@@ -1,0 +1,51 @@
+
+.DS_Store
+
+# ignore docker
+docker/
+# ignore example
+examples/
+
+# ignore scripts
+scripts/
+
+# ignore docs
+docs/
+
+
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+
+venv/
+.env
+.env.*
+
+
+.ipynb_checkpoints/
+
+# ignore my data 
+data/raw/
+data/processed/
+
+
+
+*.log
+
+
+.DS_Store
+Thumbs.db
+
+
+docker/*.log
+
+
+.coverage
+htmlcov/
+
+
+.cache/
+
+.vscode
