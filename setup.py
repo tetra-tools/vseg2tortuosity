@@ -21,7 +21,7 @@ setup(
     author='Yiyan Pan',
     author_email='yip33@pitt.edu',
     description='A project for analyzing blood vessel segmentations and calculating tortuosity metrics.',
-    url='https://github.com/tetra-tools/vessel_skeleton_map',
+    url='https://github.com/tetra-tools/vseg2tortuosity.git',
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
