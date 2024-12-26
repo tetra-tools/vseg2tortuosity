@@ -9,9 +9,11 @@ This project processes segmented 3D vessel images by skeletonizing them, constru
 
 If you use this pipeline for your projects, please cite:
 
-```
-Pan Y., Kahru K., Barinas-Mitchell E., Ibrahim T., Andreescu C., Karim H. Measuring arterial tortuosity in the cerebrovascular system using Time-of-Flight MRI. medRxiv. 2024 Decemeber 26
-```
+Pan Y., Kahru K., Barinas-Mitchell E., Ibrahim T., Andreescu C., Karim H. *Measuring arterial tortuosity in the cerebrovascular system using Time-of-Flight MRI*. medRxiv. 2024 Decemeber 26.
+
+**DOI:** [10.1101/2024.12.23.24319570](https://doi.org/10.1101/2024.12.23.24319570)  
+
+**Preprint:** [medRxiv version 1](https://www.medrxiv.org/content/10.1101/2024.12.23.24319570v1)
 
 
 ---
