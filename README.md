@@ -9,7 +9,10 @@ This project processes segmented 3D vessel images by skeletonizing them, constru
 
 If you use this pipeline for your projects, please cite:
 
-<!-- Johnson, M.J., Dougherty, G. "Automated Tortuosity Analysis of 3D Vessel Structures." Medical Engineering & Physics, 29 (2007), pp. 677-690. -->
+```
+Pan Y., Kahru K., Barinas-Mitchell E., Ibrahim T., Andreescu C., Karim H. Measuring arterial tortuosity in the cerebrovascular system using Time-of-Flight MRI. medRxiv. 2024 Decemeber 26
+```
+
 
 ---
 
