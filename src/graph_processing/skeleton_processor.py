@@ -110,9 +110,54 @@ class SkeletonProcessor:
         if self.endpoints is None or len(self.endpoints) < 2:
             logging.warning("Not enough endpoints to traverse the skeleton.")
             return
-        start, end = self.endpoints[:2]  # Assuming we take the first two endpoints
-        self.ordered_points = self._dfs_traversal(start, end)
-        logging.info(f"Skeleton traversal complete. Ordered {len(self.ordered_points)} points.")
+        # start, end = self.endpoints[:2]  # Assuming we take the first two endpoints
+        # self.ordered_points = self._dfs_traversal(start, end)
+        # logging.info(f"Skeleton traversal complete. Ordered {len(self.ordered_points)} points.")
+
+        # evaluate all possible pairs from endpoints 
+        # find best path from any pair of endpoints
+        best_path = None
+        best_path_length = 0
+
+        # nested for loop to try all pair
+        for(i, start) in enumerate(self.endpoints):
+            for end in self.endpoints[i+1:]:
+                path = self._dfs_traversal(start, end)
+
+                if not path or path[-1] != end:
+                    continue
+                cur_length = self._estimate_path_length(path)
+                if cur_length > best_path_length:
+                    best_path_length= cur_length
+                    best_path = path
+        if best_path:
+            self.ordered_points = best_path
+            logging.info(f"Skeleton traversal complete. Selected best path with {len(self.ordered_points)} points.")
+        else:
+            logging.warning("No valid path find between any end points pairs")
+
+
+    def _estimate_path_length(self, path):
+        """
+        Perform a path length estiamtion on a given path.
+
+        Parameters
+        ----------
+        path : List
+            Ordered list of points forming a path.
+        Returns
+        -------
+        path length
+            Estimated length of the input path.
+        """
+
+        if len(path) < 3:
+            return 0 
+        points = np.array(path)
+        segments = np.diff(points, axis=0)
+        segment_lengths = np.sqrt(np.sum(segments**2, axis=1))
+        total_length = np.sum(segment_lengths)
+        return total_length
 
     def _dfs_traversal(self, start, end):
         """
