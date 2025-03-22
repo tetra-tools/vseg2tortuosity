@@ -83,6 +83,10 @@ class SegmentationProcessor:
         """
         self.labels = np.unique(self.data)
         self.labels = self.labels[self.labels != 0]
+        # labels extracted from load_nifti is automatically 
+        # numpy.float64 without additional specification
+        # hence we need to convert label to integer here
+        self.labels = self.labels.astype(np.int32)
         logging.info(f"Found labels: {self.labels}")
 
     def binarize_labels(self):
@@ -146,44 +150,3 @@ class SegmentationProcessor:
             skeleton_processor.find_endpoints()
             skeleton_processor.traverse_skeleton()
             skeleton_processor.save_ordered_points(output_dir, label, base_filename)
-
-    def create_mesh(self):
-        """
-        Create a mesh for each labels' binary data using marching cubes.
-
-        Returns
-        -------
-        None
-        """
-        if not self.binary_data:
-            self.binarize_labels()
-
-        for label, binary_mask in self.binary_data.items():
-            verts, faces, _, _ = marching_cubes(binary_mask, level=0.5)
-            # Store the vertices and faces for visualization
-            self.mesh_data[label] = {'verts': verts, 'faces': faces}
-            logging.info(f"Mesh created for label {label}.")
-
-    def save_mesh(self, output_dir, base_filename):
-        """
-        Save the mesh as an STL file for each label.
-
-        Parameters
-        ----------
-        output_dir : str
-            Directory to save the STL files.
-        base_filename : str
-            Base filename for the STL files.
-
-        Returns
-        -------
-        None
-        """
-        if not self.mesh_data:
-            self.create_mesh()
-
-        for label, mesh in self.mesh_data.items():
-            verts, faces = mesh['verts'], mesh['faces']
-            output_path = os.path.join(output_dir, f"{base_filename}_label_{label}.stl")
-            trimesh.Trimesh(vertices=verts, faces=faces).export(output_path)
-            logging.info(f"Mesh for label {label} saved to {output_path}.")

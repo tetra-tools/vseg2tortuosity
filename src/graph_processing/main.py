@@ -39,10 +39,17 @@ def parse_arguments():
         help = "Choose the input seg label you care about (In the original segmentations, the values range from 1-18. You may also use your own segmentations and respective labels)."
     )
     parser.add_argument(
+        "-m", "--max_loss",
+        type=int,
+        default=10,
+        help = "Max Final Loss (combined RMSE with RMS CUrvature) tolerated for spline fit, if Final Loss exceed this, we erode segmentation and auto rerun"
+    )
+    parser.add_argument(
         "-v", "--verbose",
         action="store_true",
         help = "Enables verbose mode"
     )
+    # args.max_final_loss
     
     # Add other arguments as needed
     return parser.parse_args()
@@ -63,13 +70,15 @@ def initialize_csv(output_dir):
         writer = csv.DictWriter(file, fieldnames=[
             'Label', 'Start Point', 'End Point', 'Skeleton Size', 
             'Total Curvature', 'Mean Squared Curvature', 'RMS Curvature',
-            'AOC', 'Parametric Curve Length', 'Final Loss', 'RMSE',
+            'AOC', 'Parametric Curve Length', 'Final Loss', 'RMSE', 'Eroded'
         ])
         writer.writeheader()  # Write the header only once
     logging.info(f"Initialized CSV file at {csv_file}")
 
 
-def save_metrics_to_csv(output_dir, label, start_point, end_point, skeleton_size, total_curvature, mean_squared_curvature, rms_curvature, aoc, curve_length, final_loss, rmse):
+def save_metrics_to_csv(output_dir, label, start_point, end_point, skeleton_size,
+                        total_curvature, mean_squared_curvature, rms_curvature, aoc,
+                        curve_length, final_loss, rmse, eroded=0):
     """
     Save computed metrics to the CSV file.
 
@@ -98,6 +107,7 @@ def save_metrics_to_csv(output_dir, label, start_point, end_point, skeleton_size
         'Parametric Curve Length': curve_length,
         'Final Loss': final_loss,
         'RMSE': rmse,
+        'Eroded': eroded
     }
 
     # Write the CSV file
@@ -125,7 +135,7 @@ def process_label(label, output_dir):
         output_dir : str
             Directory where results will be saved.
         """
-        ordered_points_file = os.path.join(output_dir, f"ordered_edge_label_{label}.0_ordered_points.npy")
+        ordered_points_file = os.path.join(output_dir, f"ordered_edge_label_{label}_ordered_points.npy")
         ordered_points = np.load(ordered_points_file)
         
         # Split the ordered points into x, y, z components
@@ -187,6 +197,47 @@ def process_label(label, output_dir):
         analyzer.plot_curve(curve_plot_path)
 
         analyzer.spline_fitter.plot_residuals_vs_arc_length(residual_plot_path)
+        
+        # return the final loss so we can check whether we need to erode and rerun
+        return final_loss['final_loss']
+
+import csv 
+
+def check_for_high_loss(output_dir, threshold=10):
+    # read the csv file, collect label with high loss
+    high_loss_labels = []
+    csv_file = os.path.join(output_dir, 'skeleton_metrics.csv')
+    with open(csv_file, 'r') as file_obj:
+        reader_obj = csv.DictReader(file_obj)
+        for row in reader_obj:
+            label = row['Label']
+            final_loss = float(row['Final Loss'])
+            if final_loss > threshold:
+                high_loss_labels.append(final_loss)
+    return high_loss_labels
+
+
+
+def erode_label(input_path, label):
+
+    import nibabel as nib
+    from scipy import ndimage
+
+    # the input label should be int
+    label_value = int(label)
+    img = nib.load(input_path)
+    data = img.get_fdata()
+    binary_mask = (data==label).astype(np.uint8)
+    eroded_mask = ndimage.binary_erosion(binary_mask).astype(np.uint8)
+    data[data==label] = 0
+    data[eroded_mask == 1] = 1
+    eroded_filename = f"eroded_label_{label}_{os.path.basename(input_path)}"
+    eroded_path = os.path.join(input_path, eroded_filename)
+    eroded_img = nib.Nifti1Image(data, img.affine, img.header)
+    nib.save(eroded_img, eroded_path)
+    logging.info(f"Saved eroded segmentation for label {label} to {eroded_path}")
+    return eroded_path
+
 
 
 def main():
@@ -201,7 +252,7 @@ def main():
         # Construct file paths
         input_path = os.path.join(args.workdir, args.input)
         output_dir = args.workdir
-        base_filename = os.path.splitext(os.path.basename(args.input))[0]
+
         
         initialize_csv(output_dir)
 
@@ -218,9 +269,24 @@ def main():
 
         for label in args.labels:
             logging.info(f"Processing label {label}...")
-            process_label(label, output_dir)
+            final_loss = process_label(label, output_dir)
+            if final_loss > args.max_final_loss:
 
         logging.info("Processing completed successfully.")
+        # if process label lead to csv that contain output Final loss from either label 1 or label 2
+        # that is greater than 10, we do erosion and rerun. 
+        # in such casel, we generated eroded TOF of only the label that has >10 final loss
+        # we save this eroded TOF, Final Loss before and after erosion, and whether a vessel is ever eroded or not
+
+        ## keep in mind when do erosion, need to save the label as integer value
+        ## else it default save as float. like label 1 saved as 0.9998 and this cause mismath
+
+
+
+
+
+
+
 
     except Exception as e:
         logging.error(f"An error occurred: {e}")
