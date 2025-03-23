@@ -9,6 +9,8 @@ from src.graph_processing.skeleton_processor import SkeletonProcessor
 from src.parametrized_curves.curve_class import ParametricCurve, CurveAnalyzer, SplineOptimizer
 from src.parametrized_curves.curve_class import Plotter
 import time
+import nibabel as nib
+from scipy import ndimage
 
 def parse_arguments():
     """
@@ -39,7 +41,7 @@ def parse_arguments():
         help = "Choose the input seg label you care about (In the original segmentations, the values range from 1-18. You may also use your own segmentations and respective labels)."
     )
     parser.add_argument(
-        "-m", "--max_loss",
+        "-m", "--max_final_loss",
         type=int,
         default=10,
         help = "Max Final Loss (combined RMSE with RMS CUrvature) tolerated for spline fit, if Final Loss exceed this, we erode segmentation and auto rerun"
@@ -53,7 +55,6 @@ def parse_arguments():
     
     # Add other arguments as needed
     return parser.parse_args()
-
 
 
 def initialize_csv(output_dir):
@@ -120,7 +121,7 @@ def save_metrics_to_csv(output_dir, label, start_point, end_point, skeleton_size
     logging.info(f"Metrics saved to {csv_file}")
 
 
-def process_label(label, output_dir):
+def process_label(label, output_dir, base_filename, eroded=0):
         """
         Compute values on a specific label by loading a set of ordered points,
         fitting a cubic spline, and calculating tortuosity metrics.
@@ -135,7 +136,7 @@ def process_label(label, output_dir):
         output_dir : str
             Directory where results will be saved.
         """
-        ordered_points_file = os.path.join(output_dir, f"ordered_edge_label_{label}_ordered_points.npy")
+        ordered_points_file = os.path.join(output_dir, f"{base_filename}_label_{label}_ordered_points.npy")
         ordered_points = np.load(ordered_points_file)
         
         # Split the ordered points into x, y, z components
@@ -187,12 +188,13 @@ def process_label(label, output_dir):
                             aoc, 
                             curve_length, 
                             final_loss['final_loss'], 
-                            final_loss['rmse'])
+                            final_loss['rmse'],
+                            eroded=eroded)
 
         # Plot and save the plots
-        curve_plot_path = os.path.join(output_dir, f"curve_plot_label_{label}.png")
-        curvature_plot_path = os.path.join(output_dir, f"curvature_plot_label_{label}.png")
-        residual_plot_path = os.path.join(output_dir, f"residual_plot_{label}.png")
+        curve_plot_path = os.path.join(output_dir, f"curve_plot_label_{label}_eroded_{eroded}.png")
+        #curvature_plot_path = os.path.join(output_dir, f"curvature_plot_label_{label}_eroded_{eroded}.png")
+        residual_plot_path = os.path.join(output_dir, f"residual_plot_{label}_eroded_{eroded}.png")
 
         analyzer.plot_curve(curve_plot_path)
 
@@ -201,41 +203,43 @@ def process_label(label, output_dir):
         # return the final loss so we can check whether we need to erode and rerun
         return final_loss['final_loss']
 
-import csv 
-
-def check_for_high_loss(output_dir, threshold=10):
-    # read the csv file, collect label with high loss
-    high_loss_labels = []
-    csv_file = os.path.join(output_dir, 'skeleton_metrics.csv')
-    with open(csv_file, 'r') as file_obj:
-        reader_obj = csv.DictReader(file_obj)
-        for row in reader_obj:
-            label = row['Label']
-            final_loss = float(row['Final Loss'])
-            if final_loss > threshold:
-                high_loss_labels.append(final_loss)
-    return high_loss_labels
 
 
+def erode_label(workdir, input_filename, label):
 
-def erode_label(input_path, label):
 
-    import nibabel as nib
-    from scipy import ndimage
 
     # the input label should be int
     label_value = int(label)
-    img = nib.load(input_path)
+    print(f"label value is: {label_value}")
+    #print(f"label is {label}, type of label is {type(label_value)}")
+    img = nib.load(os.path.join(workdir, input_filename))
     data = img.get_fdata()
-    binary_mask = (data==label).astype(np.uint8)
-    eroded_mask = ndimage.binary_erosion(binary_mask).astype(np.uint8)
-    data[data==label] = 0
-    data[eroded_mask == 1] = 1
-    eroded_filename = f"eroded_label_{label}_{os.path.basename(input_path)}"
-    eroded_path = os.path.join(input_path, eroded_filename)
-    eroded_img = nib.Nifti1Image(data, img.affine, img.header)
+    print(f"default type of nibabel get data is: {type(data[30, 30, 30])}")
+    binary_mask = (data==label_value).astype(np.uint8)
+    eroded_mask = ndimage.binary_erosion(binary_mask).astype(binary_mask.dtype)
+
+    print(np.sum(binary_mask)-np.sum(eroded_mask))
+    #new_data = data.copy()
+    # i have slight issue of new data having floating point precision issue while 
+    # old segmentation dont
+    new_data = np.zeros_like(data, dtype=np.int32)
+    for unique_label in np.unique(data):
+        if unique_label != 0 and unique_label != label_value:
+            new_data[data == unique_label] = int(unique_label)
+
+    new_data[eroded_mask == 1] = label_value # be mindful here should be label value instead of just 1 
+    # because i need to save as segmentation and in new segmentation, each postition need to have value of the label
+
+    eroded_filename = f"eroded_label_{label_value}_{input_filename}"
+    eroded_path = os.path.join(workdir, eroded_filename)
+    #print(eroded_path)
+    print(f"erroded unique {np.unique(new_data)}")
+    # the erroded_segmentation contain all original labels, it only modify the content of target label to be erroded
+    # doing np.unque on erroded should give us same set as doing it on original data
+    eroded_img = nib.Nifti1Image(new_data, img.affine, img.header)
     nib.save(eroded_img, eroded_path)
-    logging.info(f"Saved eroded segmentation for label {label} to {eroded_path}")
+    logging.info(f"Saved eroded segmentation for label {label_value} to {eroded_path}")
     return eroded_path
 
 
@@ -257,20 +261,44 @@ def main():
         initialize_csv(output_dir)
 
         # Initialize SegmentationProcessor
-        seg_processor = SegmentationProcessor.from_nifti(input_path)
+        print(f"intput label type {type(args.labels)}")
+        seg_processor = SegmentationProcessor.from_nifti(input_path, custom_labels=args.labels)
 
         # Process labels
-        seg_processor.extract_labels()
         seg_processor.binarize_labels()
 
-        # generate skeleton
+        # Generate skeleton
         seg_processor.generate_skeleton()
         seg_processor.process_skeletons(output_dir=output_dir, base_filename="ordered_edge")
 
+
+
+        high_loss_labels = {}
         for label in args.labels:
             logging.info(f"Processing label {label}...")
-            final_loss = process_label(label, output_dir)
+            final_loss = process_label(label, output_dir, base_filename="ordered_edge", eroded=0)
             if final_loss > args.max_final_loss:
+                print(final_loss)
+                # maybe only a list here is fine? i dont' see why i need a map here
+                high_loss_labels[label] = final_loss
+                logging.info(f"label {label} has high loss of {final_loss}, will erode and run again")
+            if high_loss_labels:
+                # if this is not a empty map
+                logging.info(f"applying erosion to {len(high_loss_labels)} labels: {list(high_loss_labels.keys())}")
+                for high_loss_label, _ in high_loss_labels.items():
+                    #erode_label(workdir = args.workdir, input_filename = args.input, label=label)
+                    eroded_path = erode_label(workdir = args.workdir, input_filename = args.input, label=high_loss_label)
+                    print(eroded_path)
+                    if eroded_path:
+
+                        eroded_seg_processor = SegmentationProcessor.from_nifti(eroded_path, custom_labels=list(high_loss_label))
+                        eroded_seg_processor.generate_skeleton()
+                        eroded_seg_processor.process_skeletons(output_dir=output_dir, base_filename="eroded_ordered_edge")
+
+                        process_label(label, output_dir, "eroded_ordered_edge", eroded=1)
+        #                 # the skeletonization need to only order and process the one we care, skip the one 
+        #                 # like label 3, 4, 5 etc
+
 
         logging.info("Processing completed successfully.")
         # if process label lead to csv that contain output Final loss from either label 1 or label 2
@@ -280,11 +308,6 @@ def main():
 
         ## keep in mind when do erosion, need to save the label as integer value
         ## else it default save as float. like label 1 saved as 0.9998 and this cause mismath
-
-
-
-
-
 
 
 

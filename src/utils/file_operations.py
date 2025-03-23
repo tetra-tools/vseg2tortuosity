@@ -7,34 +7,7 @@ import nibabel as nib
 import logging
 
 class FileHandler:
-    @staticmethod
-    def save_graph_pickle(graph, filename, output_dir):
-        """
-        Save a graph object as a pickle file.
-        
-        Parameters:
-            - graph: The graph object to save.
-            - filename (str): Name of the pickle file.
-            - output_dir (str): Directory to save the file.
-        """
-        filepath = os.path.join(output_dir, filename)
-        with open(filepath, 'wb') as f:
-            pickle.dump(graph, f)
 
-    @staticmethod
-    def load_graph_pickle(graph_path: str):
-        """
-        Load a graph object from a pickle file.
-        
-        Parameters:
-            - graph_path (str): Path to the pickle file.
-            
-        Returns:
-            - graph: The loaded graph object.
-        """
-        with open(graph_path, 'rb') as f:
-            return pickle.load(f)
-    
     @staticmethod
     def export_to_csv(map: dict, filename: str, output_dir: str):
         df = pd.DataFrame(list(map.items()), columns=['Edge', filename])

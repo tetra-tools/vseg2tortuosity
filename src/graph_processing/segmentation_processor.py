@@ -5,9 +5,7 @@ import logging
 import os
 from src.utils.file_operations import FileHandler
 from src.graph_processing.skeleton_processor import SkeletonProcessor
-from skimage.morphology import skeletonize_3d, ball, closing
-from skimage.measure import marching_cubes
-import trimesh
+from skimage.morphology import skeletonize
 
 @dataclass
 class SegmentationProcessor:
@@ -17,8 +15,6 @@ class SegmentationProcessor:
 
     Attributes
     ----------
-    mesh_data : dict
-        Dictionary storing mesh data (vertices, faces) for each label.
     data : np.ndarray
         3D array containing the segmentation data.
     affine : np.ndarray
@@ -51,7 +47,7 @@ class SegmentationProcessor:
     binary_images: dict = field(default_factory=dict)
 
     @classmethod
-    def from_nifti(cls, file_path: str):
+    def from_nifti(cls, file_path: str, custom_labels=None):
         """
         Create an instance from a NIfTI file.
 
@@ -71,7 +67,27 @@ class SegmentationProcessor:
         affine = img.affine
         header = img.header
         logging.info(f"Loaded NIfTI file from {file_path}")
-        return cls(data=data, affine=affine, header=header, shape=shape)
+        processor = cls(data=data, affine=affine, header=header, shape=shape)
+        if custom_labels is not None:
+            processor.set_custom_labels(custom_labels)
+        return processor
+    
+    def set_custom_labels(self, custom_labels):
+        # make sure custom_labels is numpy array
+        if isinstance(custom_labels, list):
+            self.labels = np.array(custom_labels, dtype=np.int32)
+        else:
+            # make sure the np array is int32
+            self.labels = np.array(custom_labels).astype(np.int32)
+        
+        exiting_labels = np.unique(self.data).astype(np.int32)
+        for label in self.labels:
+            if label not in exiting_labels:
+                logging.warning(f"Label {label} specified but not found in the data.")
+
+        logging.info(f"Only use specified labels: {self.labels} instead of all labels")
+
+
 
     def extract_labels(self):
         """
@@ -87,6 +103,7 @@ class SegmentationProcessor:
         # numpy.float64 without additional specification
         # hence we need to convert label to integer here
         self.labels = self.labels.astype(np.int32)
+        # here labels are int32. maybe they should be unsigned int? make sure i am consistent
         logging.info(f"Found labels: {self.labels}")
 
     def binarize_labels(self):
@@ -97,14 +114,19 @@ class SegmentationProcessor:
         -------
         None
         """
-        from skimage.morphology import closing, ball
+        #from skimage.morphology import closing, ball
 
         if self.labels.size == 0:
             self.extract_labels()
+        else:
+            print(f'already defined label {self.labels}')
         for label in self.labels:
+            print(f"label type{type(label)}")
+            print(f"in segprocessor binarize, unique is: {np.unique(self.data)}")
             binary_mask = (self.data == label).astype(np.uint8)
             self.binary_data[label] = binary_mask
-            logging.info(f"Binarized and closed label {label}. Number of voxels: {np.sum(binary_mask)}")
+            print(f"Binarized label {label}. Number of voxels: {np.sum(binary_mask)}")
+            logging.info(f"Binarized label {label}. Number of voxels: {np.sum(binary_mask)}")
 
     def generate_skeleton(self):
         """
@@ -119,7 +141,7 @@ class SegmentationProcessor:
 
         for label, binary_image in self.binary_data.items():
             # Use medial axis skeletonization or skeletonize_3d
-            skeleton = skeletonize_3d(binary_image)
+            skeleton = skeletonize(binary_image)
             self.skeleton_data[label] = skeleton.astype(np.uint8)
             logging.info(f"Skeletonized label {label}. Number of skeleton voxels: {np.sum(skeleton)}")
 
