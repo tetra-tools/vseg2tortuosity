@@ -196,10 +196,13 @@ def process_label(label, output_dir, base_filename, eroded=0):
         #curvature_plot_path = os.path.join(output_dir, f"curvature_plot_label_{label}_eroded_{eroded}.png")
         residual_plot_path = os.path.join(output_dir, f"residual_plot_{label}_eroded_{eroded}.png")
 
-        analyzer.plot_curve(curve_plot_path)
+        #analyzer.plot_curve(curve_plot_path)
 
         analyzer.spline_fitter.plot_residuals_vs_arc_length(residual_plot_path)
-        
+        prefix = "eroded_" if eroded else ""
+        interactive_plot_path = os.path.join(output_dir, f"{prefix}interactive_curve_label_{label}.html")
+        analyzer.plot_interactive(save_path=interactive_plot_path, 
+                              title=f"3D Vessel Curve - Label {label}" + (" (Eroded)" if eroded else ""))
         # return the final loss so we can check whether we need to erode and rerun
         return final_loss['final_loss']
 
@@ -207,22 +210,17 @@ def process_label(label, output_dir, base_filename, eroded=0):
 
 def erode_label(workdir, input_filename, label):
 
-
-
     # the input label should be int
     label_value = int(label)
-    print(f"label value is: {label_value}")
-    #print(f"label is {label}, type of label is {type(label_value)}")
+    #print(f"label value is: {label_value}")
     img = nib.load(os.path.join(workdir, input_filename))
     data = img.get_fdata()
-    print(f"default type of nibabel get data is: {type(data[30, 30, 30])}")
+    #print(f"default type of nibabel get data is: {type(data[30, 30, 30])}")
     binary_mask = (data==label_value).astype(np.uint8)
     eroded_mask = ndimage.binary_erosion(binary_mask).astype(binary_mask.dtype)
 
-    print(np.sum(binary_mask)-np.sum(eroded_mask))
-    #new_data = data.copy()
-    # i have slight issue of new data having floating point precision issue while 
-    # old segmentation dont
+    #print(np.sum(binary_mask)-np.sum(eroded_mask))
+
     new_data = np.zeros_like(data, dtype=np.int32)
     for unique_label in np.unique(data):
         if unique_label != 0 and unique_label != label_value:
@@ -234,7 +232,7 @@ def erode_label(workdir, input_filename, label):
     eroded_filename = f"eroded_label_{label_value}_{input_filename}"
     eroded_path = os.path.join(workdir, eroded_filename)
     #print(eroded_path)
-    print(f"erroded unique {np.unique(new_data)}")
+    #print(f"erroded unique {np.unique(new_data)}")
     # the erroded_segmentation contain all original labels, it only modify the content of target label to be erroded
     # doing np.unque on erroded should give us same set as doing it on original data
     eroded_img = nib.Nifti1Image(new_data, img.affine, img.header)
@@ -261,7 +259,6 @@ def main():
         initialize_csv(output_dir)
 
         # Initialize SegmentationProcessor
-        print(f"intput label type {type(args.labels)}")
         seg_processor = SegmentationProcessor.from_nifti(input_path, custom_labels=args.labels)
 
         # Process labels
@@ -278,7 +275,6 @@ def main():
             logging.info(f"Processing label {label}...")
             final_loss = process_label(label, output_dir, base_filename="ordered_edge", eroded=0)
             if final_loss > args.max_final_loss:
-                print(final_loss)
                 # maybe only a list here is fine? i dont' see why i need a map here
                 high_loss_labels[label] = final_loss
                 logging.info(f"label {label} has high loss of {final_loss}, will erode and run again")
@@ -288,7 +284,7 @@ def main():
                 for high_loss_label, _ in high_loss_labels.items():
                     #erode_label(workdir = args.workdir, input_filename = args.input, label=label)
                     eroded_path = erode_label(workdir = args.workdir, input_filename = args.input, label=high_loss_label)
-                    print(eroded_path)
+                    
                     if eroded_path:
 
                         eroded_seg_processor = SegmentationProcessor.from_nifti(eroded_path, custom_labels=list(high_loss_label))
@@ -296,20 +292,11 @@ def main():
                         eroded_seg_processor.process_skeletons(output_dir=output_dir, base_filename="eroded_ordered_edge")
 
                         process_label(label, output_dir, "eroded_ordered_edge", eroded=1)
-        #                 # the skeletonization need to only order and process the one we care, skip the one 
-        #                 # like label 3, 4, 5 etc
+                        # the skeletonization need to only order and process the one we care, skip the one 
+                        # like label 3, 4, 5 etc
 
 
         logging.info("Processing completed successfully.")
-        # if process label lead to csv that contain output Final loss from either label 1 or label 2
-        # that is greater than 10, we do erosion and rerun. 
-        # in such casel, we generated eroded TOF of only the label that has >10 final loss
-        # we save this eroded TOF, Final Loss before and after erosion, and whether a vessel is ever eroded or not
-
-        ## keep in mind when do erosion, need to save the label as integer value
-        ## else it default save as float. like label 1 saved as 0.9998 and this cause mismath
-
-
 
     except Exception as e:
         logging.error(f"An error occurred: {e}")

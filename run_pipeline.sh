@@ -26,8 +26,9 @@ find "$WORKDIR" -type f -name "*.npy" -exec rm {} \;
 # Ensure the 'plots' directory exists
 mkdir -p "$WORKDIR/plots"
 
-# Move all generated png plot files to the 'plots' directory
+# Move all generated png plot and html files to the 'plots' directory
 echo "Moving plot files to the 'plots' directory..."
 find "$WORKDIR" -maxdepth 1 -type f -name "*.png" -exec mv {} "$WORKDIR/plots/" \;
+find "$WORKDIR" -maxdepth 1 -type f -name "*.html" -exec mv {} "$WORKDIR/plots/" \;
 
 echo "Pipeline and cleanup completed successfully."

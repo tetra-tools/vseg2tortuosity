@@ -9,5 +9,6 @@ numba
 seaborn
 sknw
 trimesh
+plotly
 
 

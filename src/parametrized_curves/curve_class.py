@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import splprep, splev, interp1d, splrep
 from scipy.stats import skew
 import logging
+import plotly.graph_objects as go
+
 class ParametricCurve:
     """
     A class to represent a discrete parametric curve in 3D space.
@@ -337,10 +339,10 @@ class SplineFitter:
         plt.axhline(y=0, color='black', linestyle='--', linewidth=0.8)
         plt.legend()
         plt.grid()
-        plt.show()
         if(path != None):
             plt.savefig(path, dpi=300)
             logging.info(f"Residual plot saved at: {path}")
+        #plt.show()
         plt.close()
 
     def plot_spline(self, ax=None):
@@ -536,7 +538,7 @@ class Plotter:
             plt.savefig(save_path, dpi=300)
             logging.info(f"Curvature plot saved at: {save_path}")
 
-        plt.show()
+        #plt.show()
         plt.close()
 
     @staticmethod
@@ -571,7 +573,7 @@ class Plotter:
             plt.savefig(save_path, dpi=300)
             logging.info(f"Curvature plot saved at: {save_path}")
 
-        plt.show()
+        #plt.show()
         plt.close()
 
     @staticmethod
@@ -634,6 +636,61 @@ class Plotter:
 
         plt.show()
         plt.close()
+    @staticmethod
+    def plot_interactive_curve(curve, spline_fitter=None, save_path=None, title="3D Vessel Curve"):
+
+        
+    
+        # Original points
+        x_orig = curve.x
+        y_orig = curve.y
+        z_orig = curve.z
+    
+        # Create the figure
+        fig = go.Figure()
+    
+        # Add original points
+        fig.add_trace(go.Scatter3d(
+            x=x_orig, y=y_orig, z=z_orig,
+            mode='markers',
+            name='Skeleton points',
+            marker=dict(
+                size=4,
+                color='blue',
+                opacity=0.8
+            )
+        ))
+    
+    # Add spline curve if available
+        if spline_fitter is not None:
+            fig.add_trace(go.Scatter3d(
+                x=spline_fitter.x_spline, y=spline_fitter.y_spline, z=spline_fitter.z_spline,
+                mode='lines',
+                name='Fitted spline',
+                line=dict(
+                    color='red',
+                    width=5
+                )
+            ))
+    
+    # Update layout with nice defaults
+        fig.update_layout(
+            title=title,
+            scene=dict(
+                xaxis_title='X',
+                yaxis_title='Y',
+                zaxis_title='Z',
+                aspectmode='data'
+            ),
+            width=900,
+            height=700,
+            margin=dict(l=65, r=50, b=65, t=90)
+        )
+    
+        # Save as HTML
+        if save_path:
+            fig.write_html(save_path)
+            logging.info(f"Interactive 3D plot saved to {save_path}")
 
 
 class CurveAnalyzer:
@@ -756,6 +813,11 @@ class CurveAnalyzer:
         self.spline_fitter.plot_residuals_vs_arc_length(
             path=save_path
         )
+    def plot_interactive(self, save_path=None, title=None):
+
+        if title is None:
+            title = "3D Vessel Curve"
+        Plotter.plot_interactive_curve(self.curve, self.spline_fitter, save_path=save_path, title=title)
 
 
 class SplineOptimizer:

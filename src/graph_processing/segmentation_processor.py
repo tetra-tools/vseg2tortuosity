@@ -119,13 +119,10 @@ class SegmentationProcessor:
         if self.labels.size == 0:
             self.extract_labels()
         else:
-            print(f'already defined label {self.labels}')
+            logging.info(f'Already defined label {self.labels}')
         for label in self.labels:
-            print(f"label type{type(label)}")
-            print(f"in segprocessor binarize, unique is: {np.unique(self.data)}")
             binary_mask = (self.data == label).astype(np.uint8)
             self.binary_data[label] = binary_mask
-            print(f"Binarized label {label}. Number of voxels: {np.sum(binary_mask)}")
             logging.info(f"Binarized label {label}. Number of voxels: {np.sum(binary_mask)}")
 
     def generate_skeleton(self):
