@@ -7,6 +7,7 @@ matplotlib
 networkx
 numba
 seaborn
+scipy
 sknw
 trimesh
 plotly

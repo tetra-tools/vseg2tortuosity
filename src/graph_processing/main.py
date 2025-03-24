@@ -41,6 +41,11 @@ def parse_arguments():
         help = "Choose the input seg label you care about (In the original segmentations, the values range from 1-18. You may also use your own segmentations and respective labels)."
     )
     parser.add_argument(
+        "-s", "--sobel",
+        action="store_true",
+        help = "Apply Sobel filter to the input segmentation."
+    )
+    parser.add_argument(
         "-m", "--max_final_loss",
         type=int,
         default=10,
@@ -263,6 +268,8 @@ def main():
 
         # Process labels
         seg_processor.binarize_labels()
+        if args.sobel:
+            seg_processor.apply_sobel()
 
         # Generate skeleton
         seg_processor.generate_skeleton()

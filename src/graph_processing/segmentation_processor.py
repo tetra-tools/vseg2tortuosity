@@ -125,6 +125,30 @@ class SegmentationProcessor:
             self.binary_data[label] = binary_mask
             logging.info(f"Binarized label {label}. Number of voxels: {np.sum(binary_mask)}")
 
+    def sobel_filter(self):
+        """
+        Apply Sobel filter to the data.
+
+        Returns
+        -------
+        None
+        """
+        from scipy.ndimage import sobel
+
+        for label, binary_image in self.binary_data.items():
+            # Apply Sobel filter in each direction
+            sobel_x = sobel(binary_image, axis=0)
+            sobel_y = sobel(binary_image, axis=1)
+            sobel_z = sobel(binary_image, axis=2)
+
+            # Combine the gradients to get the overall edge map
+            edge_map = sobel_x + sobel_y + sobel_z
+            binary_image = binary_image * (edge_map == 0)
+
+            # Save the binary image with Sobel filter applied
+            self.binary_data[label] = binary_image
+            logging.info(f"Applied Sobel filter to label {label}")
+
     def generate_skeleton(self):
         """
         Generate the skeleton for each label's binary data.
