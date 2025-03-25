@@ -121,7 +121,7 @@ def save_metrics_to_csv(output_dir, label, start_point, end_point, skeleton_size
     logging.info(f"Metrics saved to {csv_file}")
 
 
-def process_label(label, output_dir, base_filename, eroded=0):
+def process_label(label, output_dir, base_filename, eroded=0, segmentation_points=None):
         """
         Compute values on a specific label by loading a set of ordered points,
         fitting a cubic spline, and calculating tortuosity metrics.
@@ -190,20 +190,39 @@ def process_label(label, output_dir, base_filename, eroded=0):
                             final_loss['final_loss'], 
                             final_loss['rmse'],
                             eroded=eroded)
+        metrics = {
+        "Start Point": f"({start_point[0]}, {start_point[1]}, {start_point[2]})",
+        "End Point": f"({end_point[0]}, {end_point[1]}, {end_point[2]})",
+        "Skeleton Size": skeleton_size,
+        "Curve Length": f"{curve_length:.2f}",
+        "Total Curvature": f"{total_curvature:.4f}",
+        "Mean Squared Curvature": f"{mean_squared_curvature:.4f}",
+        "RMS Curvature": f"{rms_curvature:.4f}",
+        "AOC": f"{aoc:.4f}",
+        "Final Loss": f"{final_loss['final_loss']:.4f}",
+        "RMSE": f"{final_loss['rmse']:.4f}",
+        "Eroded": "Yes" if eroded else "No"
+        }
+
 
         # Plot and save the plots
-        curve_plot_path = os.path.join(output_dir, f"curve_plot_label_{label}_eroded_{eroded}.png")
+        #curve_plot_path = os.path.join(output_dir, f"curve_plot_label_{label}_eroded_{eroded}.png")
         #curvature_plot_path = os.path.join(output_dir, f"curvature_plot_label_{label}_eroded_{eroded}.png")
         residual_plot_path = os.path.join(output_dir, f"residual_plot_{label}_eroded_{eroded}.png")
-
+        #curvature_plot_path = os.path.join(output_dir, f"curvature_plot_label_{label}_eroded_{eroded}.png")
         #analyzer.plot_curve(curve_plot_path)
 
         analyzer.spline_fitter.plot_residuals_vs_arc_length(residual_plot_path)
+   
+        
         prefix = "eroded_" if eroded else ""
         interactive_plot_path = os.path.join(output_dir, f"{prefix}interactive_curve_label_{label}.html")
         analyzer.plot_interactive(save_path=interactive_plot_path, 
-                              title=f"3D Vessel Curve - Label {label}" + (" (Eroded)" if eroded else ""))
+                              title=f"3D Vessel Curve - Label {label}" + (" (Eroded)" if eroded else ""),
+                              metrics=metrics,
+                              segmentation_points=segmentation_points)
         # return the final loss so we can check whether we need to erode and rerun
+
         return final_loss['final_loss']
 
 
@@ -212,14 +231,14 @@ def erode_label(workdir, input_filename, label):
 
     # the input label should be int
     label_value = int(label)
-    #print(f"label value is: {label_value}")
+
     img = nib.load(os.path.join(workdir, input_filename))
     data = img.get_fdata()
-    #print(f"default type of nibabel get data is: {type(data[30, 30, 30])}")
+
     binary_mask = (data==label_value).astype(np.uint8)
     eroded_mask = ndimage.binary_erosion(binary_mask).astype(binary_mask.dtype)
 
-    #print(np.sum(binary_mask)-np.sum(eroded_mask))
+
 
     new_data = np.zeros_like(data, dtype=np.int32)
     for unique_label in np.unique(data):
@@ -231,7 +250,6 @@ def erode_label(workdir, input_filename, label):
 
     eroded_filename = f"eroded_label_{label_value}_{input_filename}"
     eroded_path = os.path.join(workdir, eroded_filename)
-    print(eroded_path)
     #print(f"erroded unique {np.unique(new_data)}")
     # the erroded_segmentation contain all original labels, it only modify the content of target label to be erroded
     # doing np.unque on erroded should give us same set as doing it on original data
@@ -273,9 +291,15 @@ def main():
         high_loss_labels = {}
         for label in args.labels:
             logging.info(f"Processing label {label}...")
-            final_loss = process_label(label, output_dir, base_filename="ordered_edge", eroded=0)
+            segmentation_points = seg_processor.extract_segmentation_points(int(label))
+            final_loss = process_label(label,
+                                       output_dir,
+                                       base_filename="ordered_edge",
+                                       eroded=0,
+                                       segmentation_points=segmentation_points)
+            
             if final_loss > args.max_final_loss:
-                # maybe only a list here is fine? i dont' see why i need a map here
+                # maybe make high_loss_labels a list? either way works
                 high_loss_labels[label] = final_loss
                 logging.info(f"label {label} has high loss of {final_loss}, will erode and run again")
             
@@ -284,17 +308,13 @@ def main():
             # if this is not a empty map
             logging.info(f"applying erosion to {len(high_loss_labels)} labels: {list(high_loss_labels.keys())}")
             for high_loss_label, _ in high_loss_labels.items():
-                print(f"high_loss_label:{high_loss_label}")
                 eroded_path = erode_label(workdir = args.workdir, input_filename = args.input, label=high_loss_label)
                 if eroded_path:
                     eroded_seg_processor = SegmentationProcessor.from_nifti(eroded_path, custom_labels=list(high_loss_label))
                     eroded_seg_processor.generate_skeleton()
                     eroded_seg_processor.process_skeletons(output_dir=output_dir, base_filename="eroded_ordered_edge")
-                    print("finish skeleton")
-                    process_label(high_loss_label, output_dir, "eroded_ordered_edge", eroded=1)
-                    # the skeletonization need to only order and process the one we care, skip the one 
-                    # like label 3, 4, 5 etc
-
+                    erroded_segmentation_points = eroded_seg_processor.extract_segmentation_points(int(high_loss_label))
+                    process_label(high_loss_label, output_dir, "eroded_ordered_edge", eroded=1, segmentation_points=erroded_segmentation_points)
 
         logging.info("Processing completed successfully.")
 

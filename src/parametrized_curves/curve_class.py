@@ -576,72 +576,33 @@ class Plotter:
         #plt.show()
         plt.close()
 
-    @staticmethod
-    def plot_curve_by_curvature(spline_fitter, curvature, save_path=None):
-        """
-        Plot the fitted spline with segments colored by curvature values.
 
+    def plot_interactive_curve(curve, spline_fitter=None, save_path=None,
+                               title="3D Vessel Curve", curvature=None,
+                               metrics=None, segmentation_points=None):
+        """
+        Plot html interactive curve of the points that constitutes the skeleton and the fitted spline 
+        Color the spline with curvature if curvature is available
+        
         Parameters
         ----------
+        curve : ParametricCurve
+            The ParametricCurve to plot. Contain has curve.x, curve.y, curve.z keeping x, y, z location of points in ParametricCurve
         spline_fitter : SplineFitter
-            The fitted spline object containing the evaluated spline points.
-        curvature : np.ndarray
-            Array of curvature values for color mapping.
+            Fitted spline object for the curve.
         save_path : str, optional
             Path to save the plot as an image file. If None, the plot is not saved.
-
+        title : str, optional
+            Default is 3D Vessel Curve
+        curvature: np.ndarray
+            curvature value at each point we want to evaluate of the spline
+        
         Returns
         -------
         None
-
-        Notes
-        -----
-        The color of each segment of the spline is determined by the curvature values using a colormap.
         """
-        import matplotlib.cm as cm
-        import matplotlib.colors as mcolors
 
-        fig = plt.figure(figsize=(10, 7))
-        ax = fig.add_subplot(111, projection='3d')
-
-        # Normalize the curvature values for color mapping
-        norm = mcolors.Normalize(vmin=np.min(curvature), vmax=np.max(curvature))
-        cmap = cm.get_cmap('plasma') 
-        
-        # Iterate over the points to draw line segments colored by curvature
-        for i in range(len(spline_fitter.x_spline) - 1):
-            color = cmap(norm(curvature[i]))
-            ax.plot(
-                spline_fitter.x_spline[i:i+2], 
-                spline_fitter.y_spline[i:i+2], 
-                spline_fitter.z_spline[i:i+2], 
-                color=color, linewidth=2
-            )
-
-        # Add a colorbar to show the mapping from curvature to color
-        sm = cm.ScalarMappable(cmap=cmap, norm=norm)
-        sm.set_array(curvature)
-        cbar = plt.colorbar(sm, ax=ax)
-        cbar.set_label('Curvature')
-
-        # Set axis labels
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
-        plt.title('Spline Colored by Curvature')
-
-        if save_path:
-            plt.savefig(save_path, dpi=300)
-            logging.info(f"Curve colored by curvature saved at: {save_path}")
-
-        plt.show()
-        plt.close()
-    @staticmethod
-    def plot_interactive_curve(curve, spline_fitter=None, save_path=None, title="3D Vessel Curve"):
-
-        
-    
-        # Original points
+        # Points of Skeleton
         x_orig = curve.x
         y_orig = curve.y
         z_orig = curve.z
@@ -649,6 +610,27 @@ class Plotter:
         # Create the figure
         fig = go.Figure()
     
+        # if segmentation point cloud is provided, plot it as semi-transparent 
+        if segmentation_points is not None and len(segmentation_points) > 0:
+            
+            seg_x = segmentation_points[:, 0]
+            seg_y = segmentation_points[:, 1]
+            seg_z = segmentation_points[:, 2]
+            
+            # points from segmentation
+            fig.add_trace(go.Scatter3d(
+                x=seg_x, y=seg_y, z=seg_z,
+                mode='markers',
+                name='Segmentation points',
+                marker=dict(
+                    size=2,
+                    color='grey',
+                    opacity=0.3  # Semi-transparent
+                ),
+                showlegend=True
+            ))
+
+
         # Add original points
         fig.add_trace(go.Scatter3d(
             x=x_orig, y=y_orig, z=z_orig,
@@ -661,19 +643,42 @@ class Plotter:
             )
         ))
     
-    # Add spline curve if available
+    #  spline curve if available, color spline with curvature
         if spline_fitter is not None:
-            fig.add_trace(go.Scatter3d(
-                x=spline_fitter.x_spline, y=spline_fitter.y_spline, z=spline_fitter.z_spline,
-                mode='lines',
-                name='Fitted spline',
-                line=dict(
-                    color='red',
-                    width=5
-                )
-            ))
-    
-    # Update layout with nice defaults
+            if curvature is not None:
+                fig.add_trace(go.Scatter3d(
+                    x=spline_fitter.x_spline,
+                    y=spline_fitter.y_spline,
+                    z=spline_fitter.z_spline,
+                    mode='lines',
+                    name='Fitted spline',
+                    line=dict(
+                        width=5,
+                        color=curvature,
+                        colorscale='Jet',  # or maybe viridis or plasma?
+                        colorbar=dict(
+                            title='Curvature',
+                            thickness=15,
+                            len=0.75
+                        )
+                    ),
+                    hoverinfo='text',
+                    hovertext=[f'Curvature: {c:.4f}' for c in curvature]
+                ))
+            else:
+                fig.add_trace(go.Scatter3d(
+                    x=spline_fitter.x_spline,
+                    y=spline_fitter.y_spline,
+                    z=spline_fitter.z_spline,
+                    mode='lines',
+                    name='Fitted spline',
+                    line=dict(
+                        color='red',
+                        width=5
+                    )
+                ))
+
+    # update layout 
         fig.update_layout(
             title=title,
             scene=dict(
@@ -682,10 +687,32 @@ class Plotter:
                 zaxis_title='Z',
                 aspectmode='data'
             ),
-            width=900,
+            width=1200,
             height=700,
-            margin=dict(l=65, r=50, b=65, t=90)
+            margin=dict(l=30, r=50, b=65, t=90)
         )
+        if metrics:
+            metrics_text = "<br>".join([f"<b>{k}:</b> {v}" for k, v in metrics.items()])
+        
+            fig.add_annotation(
+                x=0.99,
+                y=0.99,
+                xref="paper",
+                yref="paper",
+                text=f"<b>Vessel Metrics:</b><br>{metrics_text}",
+                showarrow=False,
+                font=dict(
+                    family="Arial",
+                    size=14,
+                    color="#000000"
+                ),
+                align="left",
+                bgcolor="rgba(255, 255, 255, 0.8)",
+                bordercolor="rgba(0, 0, 0, 0.5)",
+                borderwidth=1,
+                borderpad=4,
+                opacity=0.8
+            )
     
         # Save as HTML
         if save_path:
@@ -813,11 +840,36 @@ class CurveAnalyzer:
         self.spline_fitter.plot_residuals_vs_arc_length(
             path=save_path
         )
-    def plot_interactive(self, save_path=None, title=None):
+    def plot_interactive(self, save_path=None, title=None, metrics=None, segmentation_points=None):
+        """
+        Plot and save an interactive 3D curve of the skeleton points and fitted spline with metric information
 
+        Parameters
+        ----------
+        save_path : str, optional
+            Path to save the interactive HTML plot.
+        title : str, optional
+            Title for the plot.
+        metrics : dict, optional
+            Dictionary containing metrics to display in the plot.
+        
+        Return
+        ----------
+        None
+        """
+        
         if title is None:
             title = "3D Vessel Curve"
-        Plotter.plot_interactive_curve(self.curve, self.spline_fitter, save_path=save_path, title=title)
+
+        curvature = self.curvature_calculator.curvature_spline
+
+        Plotter.plot_interactive_curve(self.curve,
+                                       self.spline_fitter,
+                                       save_path=save_path,
+                                       title=title,
+                                       curvature=curvature,
+                                       metrics=metrics,
+                                       segmentation_points=segmentation_points)
 
 
 class SplineOptimizer:

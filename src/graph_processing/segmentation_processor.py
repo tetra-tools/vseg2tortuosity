@@ -88,7 +88,6 @@ class SegmentationProcessor:
         logging.info(f"Only use specified labels: {self.labels} instead of all labels")
 
 
-
     def extract_labels(self):
         """
         Extract unique labels from the data (excluding background 0).
@@ -124,6 +123,33 @@ class SegmentationProcessor:
             binary_mask = (self.data == label).astype(np.uint8)
             self.binary_data[label] = binary_mask
             logging.info(f"Binarized label {label}. Number of voxels: {np.sum(binary_mask)}")
+
+
+    def extract_segmentation_points(self, label):
+        """
+        Extract the coordinates of all voxels in the segmentation for a specific label.
+        
+        Parameters
+        ----------
+        label : int
+            The label to extract points for.
+            
+        Returns
+        -------
+        np.ndarray
+            Array of [x, y, z] coordinates for all voxels in the segmentation.
+        """
+        if label not in self.binary_data:
+            self.binarize_labels()
+            
+        binary_mask = self.binary_data[label]
+        segmentation_points = np.argwhere(binary_mask == 1)
+        return segmentation_points
+
+
+
+
+
 
     def generate_skeleton(self):
         """
