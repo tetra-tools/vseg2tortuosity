@@ -231,7 +231,7 @@ def erode_label(workdir, input_filename, label):
 
     eroded_filename = f"eroded_label_{label_value}_{input_filename}"
     eroded_path = os.path.join(workdir, eroded_filename)
-    #print(eroded_path)
+    print(eroded_path)
     #print(f"erroded unique {np.unique(new_data)}")
     # the erroded_segmentation contain all original labels, it only modify the content of target label to be erroded
     # doing np.unque on erroded should give us same set as doing it on original data
@@ -278,22 +278,22 @@ def main():
                 # maybe only a list here is fine? i dont' see why i need a map here
                 high_loss_labels[label] = final_loss
                 logging.info(f"label {label} has high loss of {final_loss}, will erode and run again")
-            if high_loss_labels:
-                # if this is not a empty map
-                logging.info(f"applying erosion to {len(high_loss_labels)} labels: {list(high_loss_labels.keys())}")
-                for high_loss_label, _ in high_loss_labels.items():
-                    #erode_label(workdir = args.workdir, input_filename = args.input, label=label)
-                    eroded_path = erode_label(workdir = args.workdir, input_filename = args.input, label=high_loss_label)
-                    
-                    if eroded_path:
-
-                        eroded_seg_processor = SegmentationProcessor.from_nifti(eroded_path, custom_labels=list(high_loss_label))
-                        eroded_seg_processor.generate_skeleton()
-                        eroded_seg_processor.process_skeletons(output_dir=output_dir, base_filename="eroded_ordered_edge")
-
-                        process_label(label, output_dir, "eroded_ordered_edge", eroded=1)
-                        # the skeletonization need to only order and process the one we care, skip the one 
-                        # like label 3, 4, 5 etc
+            
+            
+        if high_loss_labels:
+            # if this is not a empty map
+            logging.info(f"applying erosion to {len(high_loss_labels)} labels: {list(high_loss_labels.keys())}")
+            for high_loss_label, _ in high_loss_labels.items():
+                print(f"high_loss_label:{high_loss_label}")
+                eroded_path = erode_label(workdir = args.workdir, input_filename = args.input, label=high_loss_label)
+                if eroded_path:
+                    eroded_seg_processor = SegmentationProcessor.from_nifti(eroded_path, custom_labels=list(high_loss_label))
+                    eroded_seg_processor.generate_skeleton()
+                    eroded_seg_processor.process_skeletons(output_dir=output_dir, base_filename="eroded_ordered_edge")
+                    print("finish skeleton")
+                    process_label(high_loss_label, output_dir, "eroded_ordered_edge", eroded=1)
+                    # the skeletonization need to only order and process the one we care, skip the one 
+                    # like label 3, 4, 5 etc
 
 
         logging.info("Processing completed successfully.")
