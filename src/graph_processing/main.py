@@ -76,7 +76,7 @@ def initialize_csv(output_dir):
         writer = csv.DictWriter(file, fieldnames=[
             'Label', 'Start Point', 'End Point', 'Skeleton Size', 
             'Total Curvature', 'Mean Squared Curvature', 'RMS Curvature',
-            'AOC', 'Parametric Curve Length', 'Final Loss', 'RMSE', 'Eroded'
+            'AOC', 'Skeleton Length', 'Spline Length', 'Final Loss', 'RMSE', 'Eroded'
         ])
         writer.writeheader()  # Write the header only once
     logging.info(f"Initialized CSV file at {csv_file}")
@@ -84,7 +84,7 @@ def initialize_csv(output_dir):
 
 def save_metrics_to_csv(output_dir, label, start_point, end_point, skeleton_size,
                         total_curvature, mean_squared_curvature, rms_curvature, aoc,
-                        curve_length, final_loss, rmse, eroded=0):
+                        skeleton_length, spline_length, final_loss, rmse, eroded=0):
     """
     Save computed metrics to the CSV file.
 
@@ -110,7 +110,8 @@ def save_metrics_to_csv(output_dir, label, start_point, end_point, skeleton_size
         'Mean Squared Curvature': mean_squared_curvature,
         'RMS Curvature': rms_curvature,
         'AOC': aoc,
-        'Parametric Curve Length': curve_length,
+        'Skeleton Length': skeleton_length,
+        "Spline Length": spline_length,
         'Final Loss': final_loss,
         'RMSE': rmse,
         'Eroded': eroded
@@ -178,28 +179,36 @@ def process_label(label, output_dir, base_filename, eroded=0, segmentation_point
         # After curvature calculations
         start_point = (x[0], y[0], z[0])
         end_point = (x[-1], y[-1], z[-1])
+        start_point = f"({start_point[0]}, {start_point[1]}, {start_point[2]})"
+        end_point = f"({end_point[0]}, {end_point[1]}, {end_point[2]})"
+
+
 
         # Size of skeleton is the number of points that consitutes it 
         skeleton_size = len(x)  
-        curve_length = curve.total_length
+        skeleton_length = curve.total_length # from .diff in points of skeleton
+        spline_length = analyzer.spline_fitter.total_length # from integrating on fitted spline
+        #print(f"skeleton_length {skeleton_length}, spline_length{spline_length}")
         save_metrics_to_csv(output_dir, 
                             label, 
-                            start_point, 
+                            start_point,
                             end_point, 
                             skeleton_size, 
                             total_curvature, 
                             mean_squared_curvature, 
                             rms_curvature, 
                             aoc, 
-                            curve_length, 
+                            skeleton_length,
+                            spline_length,
                             final_loss['final_loss'], 
                             final_loss['rmse'],
                             eroded=eroded)
         metrics = {
-        "Start Point": f"({start_point[0]}, {start_point[1]}, {start_point[2]})",
-        "End Point": f"({end_point[0]}, {end_point[1]}, {end_point[2]})",
+        "Start Point": start_point,
+        "End Point": end_point,
         "Skeleton Size": skeleton_size,
-        "Curve Length": f"{curve_length:.2f}",
+        "Skeleton Length": f"{skeleton_length:.2f}",
+        "Spline Length": f"{spline_length:.2f}",
         "Total Curvature": f"{total_curvature:.4f}",
         "Mean Squared Curvature": f"{mean_squared_curvature:.4f}",
         "RMS Curvature": f"{rms_curvature:.4f}",
@@ -208,7 +217,6 @@ def process_label(label, output_dir, base_filename, eroded=0, segmentation_point
         "RMSE": f"{final_loss['rmse']:.4f}",
         "Eroded": "Yes" if eroded else "No"
         }
-
 
         # Plot and save the plots
         #curve_plot_path = os.path.join(output_dir, f"curve_plot_label_{label}_eroded_{eroded}.png")
@@ -243,8 +251,6 @@ def erode_label(workdir, input_filename, label):
     binary_mask = (data==label_value).astype(np.uint8)
     eroded_mask = ndimage.binary_erosion(binary_mask).astype(binary_mask.dtype)
 
-
-
     new_data = np.zeros_like(data, dtype=np.int32)
     for unique_label in np.unique(data):
         if unique_label != 0 and unique_label != label_value:
@@ -255,7 +261,6 @@ def erode_label(workdir, input_filename, label):
 
     eroded_filename = f"eroded_label_{label_value}_{input_filename}"
     eroded_path = os.path.join(workdir, eroded_filename)
-    #print(f"erroded unique {np.unique(new_data)}")
     # the erroded_segmentation contain all original labels, it only modify the content of target label to be erroded
     # doing np.unque on erroded should give us same set as doing it on original data
     eroded_img = nib.Nifti1Image(new_data, img.affine, img.header)

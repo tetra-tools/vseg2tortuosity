@@ -70,7 +70,7 @@ To use the Vessel Graph Processing Pipeline, we **strongly recommend** installin
 
 docker will automatically pull images that you don't have locally from dockerhub
 ```bash
-docker run --rm -v /path/to/work/dir/with/TOF/image:/app/workdir pyiyan/vseg2tortuosity:v1.0.0
+docker run --rm -v /path/to/work/dir/with/TOF/image:/app/workdir pyiyan/vseg2tortuosity:v1.3.0
 ```
 #### Docker video demo
 
