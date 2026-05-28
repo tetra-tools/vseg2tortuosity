@@ -833,8 +833,13 @@ class CurveAnalyzer:
             raise ValueError("Spline fitting must be performed before calculating AOC.")
 
         # Calculate the Euclidean distance (chord) between the first and last point
-        start_point = np.array([self.curve.x[0], self.curve.y[0], self.curve.z[0]])
-        end_point = np.array([self.curve.x[-1], self.curve.y[-1], self.curve.z[-1]])
+        # of the fitted spline, so both arc and chord come from the same source
+        start_point = np.array([self.spline_fitter.x_spline[0],
+                                 self.spline_fitter.y_spline[0],
+                                 self.spline_fitter.z_spline[0]])
+        end_point   = np.array([self.spline_fitter.x_spline[-1],
+                                 self.spline_fitter.y_spline[-1],
+                                 self.spline_fitter.z_spline[-1]])
         chord_length = np.linalg.norm(start_point - end_point)
 
         # Use the total spline length as the arc length
