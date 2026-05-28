@@ -62,6 +62,33 @@ def parse_arguments():
     return parser.parse_args()
 
 
+def save_curvature_to_csv(output_dir, label, s_uniform, curvature, eroded=0):
+    """
+    Save the per-point curvature profile to a CSV file.
+
+    Parameters
+    ----------
+    output_dir : str
+        Directory where the CSV file will be saved.
+    label : str
+        Label identifier for the vessel.
+    s_uniform : np.ndarray
+        Arc length values at each evaluation point.
+    curvature : np.ndarray
+        Curvature values at each evaluation point.
+    eroded : int
+        Whether this is from an eroded segmentation (0 or 1).
+    """
+    prefix = "eroded_" if eroded else ""
+    csv_file = os.path.join(output_dir, f"{prefix}curvature_label_{label}.csv")
+    with open(csv_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['arc_length', 'curvature'])
+        for s, k in zip(s_uniform, curvature):
+            writer.writerow([s, k])
+    logging.info(f"Curvature profile saved to {csv_file}")
+
+
 def initialize_csv(output_dir):
     """
     Initialize the CSV file for saving skeleton metrics.
@@ -74,8 +101,9 @@ def initialize_csv(output_dir):
     csv_file = os.path.join(output_dir, 'skeleton_metrics.csv')
     with open(csv_file, mode='w', newline='') as file:
         writer = csv.DictWriter(file, fieldnames=[
-            'Label', 'Start Point', 'End Point', 'Skeleton Size', 
+            'Label', 'Start Point', 'End Point', 'Skeleton Size',
             'Total Curvature', 'Mean Squared Curvature', 'RMS Curvature',
+            'Top10pct Mean Curvature',
             'AOC', 'Skeleton Length', 'Spline Length', 'Final Loss', 'RMSE', 'Eroded'
         ])
         writer.writeheader()  # Write the header only once
@@ -83,7 +111,8 @@ def initialize_csv(output_dir):
 
 
 def save_metrics_to_csv(output_dir, label, start_point, end_point, skeleton_size,
-                        total_curvature, mean_squared_curvature, rms_curvature, aoc,
+                        total_curvature, mean_squared_curvature, rms_curvature,
+                        top10pct_mean_curvature, aoc,
                         skeleton_length, spline_length, final_loss, rmse, eroded=0):
     """
     Save computed metrics to the CSV file.
@@ -109,6 +138,7 @@ def save_metrics_to_csv(output_dir, label, start_point, end_point, skeleton_size
         'Total Curvature': total_curvature,
         'Mean Squared Curvature': mean_squared_curvature,
         'RMS Curvature': rms_curvature,
+        'Top10pct Mean Curvature': top10pct_mean_curvature,
         'AOC': aoc,
         'Skeleton Length': skeleton_length,
         "Spline Length": spline_length,
@@ -158,14 +188,20 @@ def process_label(label, output_dir, base_filename, eroded=0, segmentation_point
         points_per_unit_length = 10  
         eval_points = int(curve.total_length * points_per_unit_length)
         optimizer = SplineOptimizer(analyzer)
-        final_loss = optimizer.fit_with_multiple_initial_smoothings(
-            k=3, max_iterations=200, tolerance=1e-6, eval_points=eval_points
-        )
+        final_loss = optimizer.optimize_smoothing(k=3, eval_points=eval_points)
 
         total_curvature = analyzer.curvature_calculator.total_curvature()
         mean_squared_curvature = analyzer.curvature_calculator.mean_squared_curvature()
         rms_curvature = analyzer.curvature_calculator.rms_curvature()
+        top10pct_mean_curvature = analyzer.curvature_calculator.top_percentile_mean_curvature(top_pct=10.0)
         aoc = analyzer.calculate_aoc()
+
+        save_curvature_to_csv(
+            output_dir, label,
+            analyzer.spline_fitter.s_uniform,
+            analyzer.curvature_calculator.curvature_spline,
+            eroded=eroded
+        )
 
         # Log output
         logging.info("Processing completed successfully.")
@@ -189,18 +225,19 @@ def process_label(label, output_dir, base_filename, eroded=0, segmentation_point
         skeleton_length = curve.total_length # from .diff in points of skeleton
         spline_length = analyzer.spline_fitter.total_length # from integrating on fitted spline
         #print(f"skeleton_length {skeleton_length}, spline_length{spline_length}")
-        save_metrics_to_csv(output_dir, 
-                            label, 
+        save_metrics_to_csv(output_dir,
+                            label,
                             start_point,
-                            end_point, 
-                            skeleton_size, 
-                            total_curvature, 
-                            mean_squared_curvature, 
-                            rms_curvature, 
-                            aoc, 
+                            end_point,
+                            skeleton_size,
+                            total_curvature,
+                            mean_squared_curvature,
+                            rms_curvature,
+                            top10pct_mean_curvature,
+                            aoc,
                             skeleton_length,
                             spline_length,
-                            final_loss['final_loss'], 
+                            final_loss['final_loss'],
                             final_loss['rmse'],
                             eroded=eroded)
         metrics = {
@@ -212,6 +249,7 @@ def process_label(label, output_dir, base_filename, eroded=0, segmentation_point
         "Total Curvature": f"{total_curvature:.4f}",
         "Mean Squared Curvature": f"{mean_squared_curvature:.4f}",
         "RMS Curvature": f"{rms_curvature:.4f}",
+        "Top10pct Mean Curvature": f"{top10pct_mean_curvature:.4f}",
         "AOC": f"{aoc:.4f}",
         "Final Loss": f"{final_loss['final_loss']:.4f}",
         "RMSE": f"{final_loss['rmse']:.4f}",
