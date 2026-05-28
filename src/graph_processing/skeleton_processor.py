@@ -6,14 +6,6 @@ import os
 from sklearn.neighbors import NearestNeighbors
 import logging
 
-# Pre-sorted by squared distance: face (1) → edge (2) → corner (3) neighbors.
-# Computed once at import time instead of inside the DFS hot loop.
-_NEIGHBOR_OFFSETS = sorted(
-    [(ox, oy, oz) for ox, oy, oz in product([-1, 0, 1], repeat=3)
-     if (ox, oy, oz) != (0, 0, 0)],
-    key=lambda o: o[0]*o[0] + o[1]*o[1] + o[2]*o[2]
-)
-
 class SkeletonProcessor:
     """
     A class for processing and traversing a 3D skeleton extracted from a segmentation.
@@ -183,10 +175,12 @@ class SkeletonProcessor:
         list of tuple
             List of ordered points from the traversal.
         """
-        s0, s1, s2 = self.skeleton.shape
+
+        # explore all 26 adjacent cells
+        neighbors_offsets = [offset for offset in product([-1, 0, 1], repeat=3) if offset != (0, 0, 0)]
         visited = set()
         ordered_points = []
-        stack = [(start, None)]
+        stack = [(start, None)]  # Each element is (current_point, previous_point)
 
         while stack:
             current, prev = stack.pop()
@@ -199,19 +193,35 @@ class SkeletonProcessor:
             if current == end:
                 break
 
-            cx, cy, cz = current
-            # _NEIGHBOR_OFFSETS is pre-sorted by distance (face→edge→corner).
-            # We push in that order so the stack (LIFO) pops farthest-first,
-            # matching the original traversal behaviour.
-            for ox, oy, oz in _NEIGHBOR_OFFSETS:
-                nx, ny, nz = cx + ox, cy + oy, cz + oz
-                neighbor = (nx, ny, nz)
-                if (0 <= nx < s0 and
-                    0 <= ny < s1 and
-                    0 <= nz < s2 and
-                    self.skeleton[nx, ny, nz] == 1 and
-                    neighbor != prev and
-                    neighbor not in visited):
+            # Explore neighbors
+            neighbors = []
+            for offset in neighbors_offsets:
+                # Add offset to move from current to neighbor
+                neighbor = tuple(np.array(current) + np.array(offset))
+                # Check bounds
+                if (0 <= neighbor[0] < self.skeleton.shape[0] and
+                    0 <= neighbor[1] < self.skeleton.shape[1] and
+                    0 <= neighbor[2] < self.skeleton.shape[2] and
+                    self.skeleton[neighbor] == 1 and
+                    neighbor != prev):
+                    neighbors.append(neighbor)
+
+            # After for loop, get a list of valid neighbors of current cell
+            # Sort neighbors by Euclidean distance
+
+            neighbor_distances = [] # (key: distance from neightbor to current, val: neighbor)
+            for neighbor in neighbors:
+                distance = np.linalg.norm(np.array(neighbor) - np.array(current))
+                neighbor_distances.append((distance, neighbor))
+
+            # sort neighbor by distance, sorted in increasing order
+            neighbor_distances.sort(key=lambda x: x[0])
+
+            # get list of sorted neighbor from the sorted index
+            sorted_neighbors = [neighbor for _, neighbor in neighbor_distances]
+
+            for neighbor in sorted_neighbors:
+                if neighbor not in visited:
                     stack.append((neighbor, current))
 
         return ordered_points

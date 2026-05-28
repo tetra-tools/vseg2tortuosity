@@ -188,7 +188,9 @@ def process_label(label, output_dir, base_filename, eroded=0, segmentation_point
         points_per_unit_length = 10  
         eval_points = int(curve.total_length * points_per_unit_length)
         optimizer = SplineOptimizer(analyzer)
-        final_loss = optimizer.optimize_smoothing(k=3, eval_points=eval_points)
+        final_loss = optimizer.fit_with_multiple_initial_smoothings(
+            k=3, max_iterations=200, tolerance=1e-6, eval_points=eval_points
+        )
 
         total_curvature = analyzer.curvature_calculator.total_curvature()
         mean_squared_curvature = analyzer.curvature_calculator.mean_squared_curvature()

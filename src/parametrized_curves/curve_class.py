@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import splprep, splev, interp1d, splrep
-from scipy.optimize import minimize_scalar
 from scipy.stats import skew
 import logging
 import plotly.graph_objects as go
@@ -918,47 +917,107 @@ class SplineOptimizer:
         curve_points = np.column_stack((self.analyzer.curve.x, self.analyzer.curve.y, self.analyzer.curve.z))
         distances = np.sqrt(np.sum(np.diff(curve_points, axis=0)**2, axis=1))
         avg_spacing = np.mean(distances)
-        smoothing_factor = avg_spacing * len(curve_points) * 0.1
+        smoothing_factor = avg_spacing * len(curve_points) * 0.1  # Adjust 0.1 as needed
         return smoothing_factor
 
-    def optimize_smoothing(self, k: int = 3, eval_points: int = None) -> dict:
+    def iterative_spline_fit(self, initial_smoothing: float, k: int = 3,
+                            max_iterations: int = 100, tolerance: float = 1e-6,
+                            eval_points: int = None)-> float:
         """
-        Find the optimal smoothing factor using Brent's method (scipy.optimize.minimize_scalar).
+        Iteratively adjust the smoothing factor to minimize RMS curvature.
 
-        Optimizes the combined loss RMSE + lambda * RMS_curvature over a bounded
-        smoothing range derived from the curve's average point spacing. Converges in
-        ~15-25 function evaluations instead of the up-to-400 of the previous
-        iterative approach.
+        Parameters
+        ----------
+        initial_smoothing : float
+            Initial smoothing factor.
+        k : int, optional
+            Degree of the spline (default is 3).
+        max_iterations : int, optional
+            Maximum number of iterations (default is 100).
+        tolerance : float, optional
+            Convergence tolerance (default is 1e-6).
+        eval_points : int, optional
+            Number of evaluation points (default is None).
+
+        Returns
+        -------
+        float
+            Final RMS curvature after fitting.
+        """
+        smoothing = initial_smoothing
+        previous_rms = np.inf
+        smoothing_increment = 1.0
+
+        for iteration in range(1, max_iterations + 1):
+            self.analyzer.fit_spline(smoothing=smoothing, k=k, eval_points=eval_points)
+            self.analyzer.compute_curvatures()
+            rms_curvature = self.analyzer.curvature_calculator.rms_curvature()
+            logging.info(f"Iteration {iteration}: Smoothing = {smoothing:.6f}, RMS Curvature = {rms_curvature:.6f}")
+
+            if abs(previous_rms - rms_curvature) < tolerance:
+                logging.info("Convergence achieved.")
+                break
+
+            if rms_curvature < previous_rms:
+                smoothing += smoothing_increment
+            else:
+                smoothing -= smoothing_increment
+                smoothing_increment /= 2.0
+
+            previous_rms = rms_curvature
+
+        return rms_curvature
+
+    def fit_with_multiple_initial_smoothings(self, k: int = 3, max_iterations: int = 100,
+                                            tolerance: float = 1e-6, eval_points: int = None):
+        """
+        Test multiple initial smoothing factors and choose the one with the best (lowest) RMS curvature.
 
         Parameters
         ----------
         k : int, optional
             Degree of the spline (default is 3).
+        max_iterations : int, optional
+            Maximum number of iterations (default is 100).
+        tolerance : float, optional
+            Convergence tolerance (default is 1e-6).
         eval_points : int, optional
-            Number of evaluation points for the spline (default is None).
+            Number of evaluation points (default is None).
 
         Returns
         -------
-        dict
-            Dictionary with 'rmse' and 'final_loss' at the optimal smoothing.
+        float
+            The final loss after fitting with the best smoothing factor.
         """
+
         initial_smoothing = self.estimate_initial_smoothing()
-        lower = max(initial_smoothing * 0.01, 1e-3)
-        upper = initial_smoothing * 20.0
+        candidate_smoothings = [initial_smoothing * factor for factor in [0.5, 1.0, 1.5, 2.0]]
 
-        def objective(smoothing):
-            self.analyzer.fit_spline(smoothing=smoothing, k=k, eval_points=eval_points)
-            self.analyzer.compute_curvatures()
-            return self.analyzer.compute_final_loss()['final_loss']
+        best_smoothing = None
+        best_rms_curvature = np.inf
 
-        result = minimize_scalar(objective, bounds=(lower, upper), method='bounded')
-        logging.info(f"Optimal smoothing: {result.x:.6f}, final loss: {result.fun:.6f} "
-                     f"(converged in {result.nfev} evaluations)")
+        # Try all 4 possible initial_smoothing factor and keep the best one
+        for initial_smoothing in candidate_smoothings:
+            logging.info(f"\nTesting initial smoothing factor: {initial_smoothing:.6f}")
+            rms_curvature = self.iterative_spline_fit(
+                initial_smoothing=initial_smoothing, k=k, max_iterations=max_iterations,
+                tolerance=tolerance, eval_points=eval_points
+            )
+            logging.info(f"Finished with smoothing: {initial_smoothing}, RMS Curvature: {rms_curvature}")
 
-        # Re-run final fit at optimal smoothing so analyzer state is consistent
-        self.analyzer.fit_spline(smoothing=result.x, k=k, eval_points=eval_points)
-        self.analyzer.compute_curvatures()
-        return self.analyzer.compute_final_loss()
+            if rms_curvature < best_rms_curvature:
+                best_rms_curvature = rms_curvature
+                best_smoothing = initial_smoothing
+
+        logging.info(f"\nBest initial smoothing factor: {best_smoothing}, with RMS Curvature: {best_rms_curvature}")
+        # Perform final fit with the best smoothing factor
+        self.iterative_spline_fit(initial_smoothing=best_smoothing, k=k,
+                                  max_iterations=max_iterations, tolerance=tolerance,
+                                  eval_points=eval_points)
+
+        # Calculate and output the final objective function value as a reference for fit quality
+        final_loss = self.analyzer.compute_final_loss()
+        return final_loss
     
 
 class Shape:
